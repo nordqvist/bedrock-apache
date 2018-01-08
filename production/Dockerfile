@@ -5,6 +5,8 @@ FROM wordpress:4-apache
 # Package Versions and SHA1 Checksums
 ENV BEDROCK_VERSION=1.8.5 \
     BEDROCK_SHA1=6f9b2b4b094b914e29000f00e71ed39782535206 \
+    WP_CLI_VERSION=1.4.1 \
+    WP_CLI_SHA1=e7a9be3c2b82e953843c993ccc6b76952ed4f1bd \
     COMPOSER_VERSION=1.5.6 \
     COMPOSER_SHA1=c09effd1675ae61a550de9f61f8293f792f9c336
 
@@ -27,6 +29,15 @@ RUN set -xe && \
     docker-php-ext-install zip && \
     apt-get clean && \
     rm -r /var/lib/apt/lists/* && \
+    true
+
+# Install WP-CLI
+RUN set -xe && \
+    curl -sS -o /usr/local/bin/wp \
+        -L https://github.com/wp-cli/wp-cli/releases/download/v${WP_CLI_VERSION}/wp-cli-${WP_CLI_VERSION}.phar && \
+    sha1sum /usr/local/bin/wp && \
+    echo "$WP_CLI_SHA1 */usr/local/bin/wp" | sha1sum -c - && \
+    chmod +x  /usr/local/bin/wp && \
     true
 
 # Install Composer
@@ -88,5 +99,8 @@ RUN set -xe && \
 
 VOLUME /app/web/app/uploads
 
-ENTRYPOINT []
-CMD ["apache2-foreground"]
+# Add our entrypoint and make it executable
+ADD run.sh /run.sh
+RUN chmod +x /run.sh
+
+ENTRYPOINT ["/run.sh"]

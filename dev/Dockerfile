@@ -24,6 +24,7 @@ RUN set -xe && \
         git \
         zlib1g-dev \
         less \
+        mysql-client \
         --no-install-recommends \
         && \
     docker-php-ext-install zip && \
