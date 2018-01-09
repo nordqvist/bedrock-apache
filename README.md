@@ -1,10 +1,14 @@
 # bedrock-apache
 
-Docker Image for Production and Development deployment of [Bedrock](https://roots.io/bedrock/)
+Docker Image for Production and Development deployment of [Roots Bedrock](https://roots.io/bedrock/)
+
+Based on [Bedrocker](https://github.com/squareweave/bedrocker).
+
+Note: The production image has WP-CLI and Composer available only during build. The executables are removed once the container is up and running. Use the dev image to take advantage of these.
 
 ## Getting started
 
-You should have a .env.production and .env.local for production and development variables. You might for example let the installation handle the environment variables for the database connection and in that case exclude them from the .env.production file.
+You should have a **.env.production** and **.env.local** for production and development variables. You might for example let the installation handle the environment variables for the database connection and in that case exclude them from the .env.production file.
 
 Your Dockerfile should include the following:
 
@@ -87,7 +91,7 @@ RUN composer remove johnpbloch/wordpress --no-interaction
 RUN composer install && composer clear-cache
 ```
 
-If you are using Docker compose for your development your docker-compose.yml-file should look something like this:
+If you are using Docker compose for your development your **docker-compose.yml**-file should look something like this:
 
 ```yaml
 version: '3.2'
@@ -128,3 +132,5 @@ services:
 volumes:
     db_data:
 ```
+
+This will make the site available on http://localhost:8000
