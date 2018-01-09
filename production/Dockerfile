@@ -65,14 +65,14 @@ RUN set -xe && \
     tar --strip-components=1 -xzf /tmp/bedrock.tar.gz -C /app && \
     rm /tmp/bedrock.tar.gz && \
     chown -R www-data:www-data /app && \
+    composer remove \
+             johnpbloch/wordpress \
+             --no-interaction && \
     composer install --no-interaction --no-dev && \
     true
 
 # Get latest version of WordPress from WordPress Docker image
 RUN set -xe && \    
-    composer remove \
-             johnpbloch/wordpress \
-             --no-interaction && \
     composer install --no-interaction --no-dev && \
     composer clear-cache && \
     rm -rf /app/web/wp && \
@@ -117,6 +117,10 @@ RUN set -xe && \
 
 VOLUME /app/web/app/uploads
 
+# Add our entrypoint and make it executable
+ADD run.sh /run.sh
+RUN chmod +x /run.sh
+
 ENTRYPOINT ["/run.sh"]
 
-CMD ["apache2-foreground"]
+# CMD ["apache2-foreground"]
