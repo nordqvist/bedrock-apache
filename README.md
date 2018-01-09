@@ -19,12 +19,14 @@ ADD .env.production /app/.env
 ```
 for production
 
+
 ```dockerfile
 FROM nordqvist/bedrock-apache:dev
 
 ADD .env.local /app/.env
 ```
 for development
+
 
 If changes has been to the config files to accomodate for custom environment variables make sure to add them to the container like this:
 
@@ -42,13 +44,14 @@ or bind them to your local folder if used for development
 VOLUME web/app/ app/web/app/
 ```
 
+
 Add the project composer file.
 ```dockerfile
 ADD composer.json composer.lock /app/
 ```
 
 If you want to take advantage of upstream WordPress updates run this command.
-```
+```dockerfile
 RUN composer remove johnpbloch/wordpress --no-interaction
 ```
 
