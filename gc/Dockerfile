@@ -1,14 +1,36 @@
 FROM wordpress:4-apache
 
-# Based on squareweave/bedrocker (https://github.com/squareweave/bedrocker)
+# -----
+# Based on greatbeyond/apache-php7
+# -----
+
+ENV PHP_CONF /usr/local/etc/php/conf.d
+
+# update the repository
+RUN apt-get update
+
+# Install sendmail support
+RUN apt-get install -y ssmtp && \
+    echo "FromLineOverride=YES" >> /etc/ssmtp/ssmtp.conf && \
+    echo 'sendmail_path = "/usr/sbin/ssmtp -t"' > ${PHP_CONF}/mail.ini
+
+# Add gcfuse repo.
+RUN apt-get install -y gnupg && \
+    export GCSFUSE_REPO=gcsfuse-jessie && \
+    echo "deb http://packages.cloud.google.com/apt $GCSFUSE_REPO main" | tee /etc/apt/sources.list.d/gcsfuse.list && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+
+# Install gcfuse.
+RUN apt-get update && \
+    apt-get install -y gcsfuse
+
+# -----
+# Based on nordqvist/bedrock-apache (https://github.com/nordqvist/bedrock-apache)
+# -----
 
 # Bedrock Version and SHA1 checksum
 ENV BEDROCK_VERSION=1.8.5 \
     BEDROCK_SHA1=6f9b2b4b094b914e29000f00e71ed39782535206
-
-# WP-CLI Version and SHA1 checksum
-ENV WP_CLI_VERSION=1.4.1 \
-    WP_CLI_SHA1=e7a9be3c2b82e953843c993ccc6b76952ed4f1bd
 
 # Composer Version and SHA1 checksum
 ENV COMPOSER_VERSION=1.5.6 \
@@ -18,7 +40,7 @@ ENV COMPOSER_VERSION=1.5.6 \
 ENV LC_ALL=C.UTF-8 \
     LANG=C.UTF-8 \
     WP_ENV=development \
-    DEFAULT_TIMEZONE=Sweden/Stockholm \
+    DEFAULT_TIMEZONE=UTC+1 \
     WEBROOT=/app/web
 
 # Install Bedrock dependencies
@@ -26,23 +48,13 @@ RUN set -xe && \
     apt-get -qq update && \
     apt-get -qq install \
         git \
-        zlib1g-dev \
+        libzip-dev \
         less \
-        mysql-client \
         --no-install-recommends \
         && \
     docker-php-ext-install zip && \
     apt-get clean && \
     rm -r /var/lib/apt/lists/* && \
-    true
-
-# Install WP-CLI
-RUN set -xe && \
-    curl -sS -o /usr/local/bin/wp \
-        -L https://github.com/wp-cli/wp-cli/releases/download/v${WP_CLI_VERSION}/wp-cli-${WP_CLI_VERSION}.phar && \
-    sha1sum /usr/local/bin/wp && \
-    echo "$WP_CLI_SHA1 */usr/local/bin/wp" | sha1sum -c - && \
-    chmod +x  /usr/local/bin/wp && \
     true
 
 # Install Composer
@@ -57,24 +69,38 @@ RUN set -xe && \
 # Set directory for Bedrock
 WORKDIR /app
 
-# Install Bedrock
+
+
+
+# Get Bedrock
 RUN set -xe && \
     curl -sS -o /tmp/bedrock.tar.gz \
         -L https://github.com/roots/bedrock/archive/${BEDROCK_VERSION}.tar.gz && \
     echo "$BEDROCK_SHA1 */tmp/bedrock.tar.gz" | sha1sum -c - && \
     tar --strip-components=1 -xzf /tmp/bedrock.tar.gz -C /app && \
     rm /tmp/bedrock.tar.gz && \
-    chown -R www-data:www-data /app && \
+    true
+
+# set folder permissions
+RUN chown -R www-data:www-data /app /var/www
+
+# Switch to non-root user
+USER www-data
+
+# Intall Bedrock
+RUN set -xe && \
+    composer install --no-interaction --no-dev && \
     composer remove \
              johnpbloch/wordpress \
              --no-interaction && \
-    composer install --no-interaction --no-dev && \
+    composer clear-cache && \
     true
+
+# Switch back to root user
+USER root
 
 # Get latest version of WordPress from WordPress Docker image
 RUN set -xe && \
-    composer install --no-interaction --no-dev && \
-    composer clear-cache && \
     rm -rf /app/web/wp && \
     ln -s /usr/src/wordpress /app/web/wp && \
     true
@@ -91,9 +117,6 @@ RUN set -xe && \
         echo 'upload_max_filesize=50M'; \
         echo 'post_max_size=60M'; \
     } > /usr/local/etc/php/conf.d/upload-limit.ini && \
-    { \
-        echo 'display_errors=0'; \
-    } > /usr/local/etc/php/conf.d/error-reporting.ini && \
     true
 
 # Configure Apache
@@ -127,5 +150,3 @@ ADD run.sh /run.sh
 RUN chmod +x /run.sh
 
 ENTRYPOINT ["/run.sh"]
-
-# CMD ["apache2-foreground"]
