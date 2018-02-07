@@ -1,47 +1,18 @@
-FROM php:7.2-apache
+FROM wordpress:4-apache
 
-# Composer Version and SHA1 checksum
-ENV COMPOSER_VERSION=1.6.3 \
-    COMPOSER_SHA256=52cb7bbbaee720471e3b34c8ae6db53a38f0b759c06078a80080db739e4dcab6
+# -----
+# Based on greatbeyond/apache-php7
+# -----
 
-# Default environment variables
-ENV LC_ALL=C.UTF-8 \
-    LANG=C.UTF-8 \
-    WP_ENV=production \
-    DEFAULT_TIMEZONE=Sweden/Stockholm \
-    WEBROOT=/app/public
+ENV PHP_CONF /usr/local/etc/php/conf.d
 
-# Install Laravel requirements
-RUN set -xe \
-    && apt-get -qq update \
-    && apt-get -qq -y install \
-      libicu-dev \
-      libpq-dev \
-      zlib1g-dev \
-      libmemcached-dev \
-      libxml2-dev \
-      openssl \
-      git \
-      --no-install-recommends \
-    && pecl install \
-      memcached-3.0.4 \
-    && docker-php-ext-enable \
-      memcached \
-    && docker-php-ext-configure \
-      pdo_mysql --with-pdo-mysql=mysqlnd \
-    && docker-php-ext-install \
-      mysqli \
-      pgsql \
-      pdo_pgsql \
-      pdo_mysql \
-      mbstring \
-      tokenizer \
-      xml \
-      intl \
-      pcntl \
-      zip \
-      opcache \
-    && true
+# update the repository
+RUN apt-get update
+
+# Install sendmail support
+RUN apt-get install -y ssmtp && \
+    echo "FromLineOverride=YES" >> /etc/ssmtp/ssmtp.conf && \
+    echo 'sendmail_path = "/usr/sbin/ssmtp -t"' > ${PHP_CONF}/mail.ini
 
 # Add gcfuse repo.
 RUN apt-get install -y gnupg && \
@@ -50,23 +21,92 @@ RUN apt-get install -y gnupg && \
     curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
 
 # Install gcfuse.
-RUN apt-get update -qq && \
-    apt-get install -qq -y gcsfuse
+RUN apt-get update && \
+    apt-get install -y gcsfuse
+
+# -----
+# Based on nordqvist/bedrock-apache (https://github.com/nordqvist/bedrock-apache)
+# -----
+
+# Bedrock Version and SHA1 checksum
+ENV BEDROCK_VERSION=1.8.5 \
+    BEDROCK_SHA1=6f9b2b4b094b914e29000f00e71ed39782535206
+
+# Composer Version and SHA1 checksum
+ENV COMPOSER_VERSION=1.5.6 \
+    COMPOSER_SHA1=c09effd1675ae61a550de9f61f8293f792f9c336
+
+# Default environment variables
+ENV LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8 \
+    WP_ENV=development \
+    DEFAULT_TIMEZONE=UTC+1 \
+    WEBROOT=/app/web
+
+# Install Bedrock dependencies
+RUN set -xe && \
+    apt-get -qq update && \
+    apt-get -qq install \
+        git \
+        libzip-dev \
+        less \
+        --no-install-recommends \
+        && \
+    docker-php-ext-install zip && \
+    apt-get clean && \
+    rm -r /var/lib/apt/lists/* && \
+    true
 
 # Install Composer
 RUN set -xe && \
     curl -sS -o /usr/local/bin/composer \
         -L https://github.com/composer/composer/releases/download/${COMPOSER_VERSION}/composer.phar && \
-    sha256sum /usr/local/bin/composer && \
-    echo "$COMPOSER_SHA256 */usr/local/bin/composer" | sha256sum -c - && \
+    sha1sum /usr/local/bin/composer && \
+    echo "$COMPOSER_SHA1 */usr/local/bin/composer" | sha1sum -c - && \
     chmod +x  /usr/local/bin/composer && \
     true
 
 # Set directory for Bedrock
 WORKDIR /app
 
+
+
+
+# Get Bedrock
+RUN set -xe && \
+    curl -sS -o /tmp/bedrock.tar.gz \
+        -L https://github.com/roots/bedrock/archive/${BEDROCK_VERSION}.tar.gz && \
+    echo "$BEDROCK_SHA1 */tmp/bedrock.tar.gz" | sha1sum -c - && \
+    tar --strip-components=1 -xzf /tmp/bedrock.tar.gz -C /app && \
+    rm /tmp/bedrock.tar.gz && \
+    true
+
+# set folder permissions
+RUN chown -R www-data:www-data /app /var/www
+
+# Switch to non-root user
+USER www-data
+
+# Intall Bedrock
+RUN set -xe && \
+    composer install --no-interaction --no-dev && \
+    composer remove \
+             johnpbloch/wordpress \
+             --no-interaction && \
+    composer clear-cache && \
+    true
+
+# Switch back to root user
+USER root
+
+# Get latest version of WordPress from WordPress Docker image
+RUN set -xe && \
+    rm -rf /app/web/wp && \
+    ln -s /usr/src/wordpress /app/web/wp && \
+    true
+
 # Add WordPress rewrite to config
-ADD laravel-rewrite.conf /etc/apache2/conf-available/laravel-rewrite.conf
+ADD wordpress-rewrite.conf /etc/apache2/conf-available/wordpress-rewrite.conf
 
 # Configure PHP
 RUN set -xe && \
@@ -81,17 +121,29 @@ RUN set -xe && \
 
 # Configure Apache
 RUN set -xe && \
-    echo "DocumentRoot /app/public" >> /etc/apache2/apache2.conf && \
+    echo "DocumentRoot /app/web" >> /etc/apache2/apache2.conf && \
     rm /etc/apache2/sites-enabled/000-default.conf && \
-    sed -i 's#<Directory /var/www/>.*#<Directory /app/public/>#' /etc/apache2/apache2.conf && \
-    ln -s /etc/apache2/conf-available/laravel-rewrite.conf /etc/apache2/conf-enabled/laravel-rewrite.conf && \
+    sed -i 's#<Directory /var/www/>.*#<Directory /app/web/>#' /etc/apache2/apache2.conf && \
+    ln -s /etc/apache2/conf-available/wordpress-rewrite.conf /etc/apache2/conf-enabled/wordpress-rewrite.conf && \
     true
 
-# Clean up
-RUN set -xe \
-    && apt-get clean \
-    && rm -r /var/lib/apt/lists/* \
-    && true
+# Hook Bedrock wp-config
+RUN set -xe && \
+    { \
+        echo "<?php"; \
+        echo "define('FORCE_SSL_ADMIN', true);"; \
+        echo "if ( strpos(\$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false ) \$_SERVER['HTTPS'] = 'on';"; \
+        echo "require('/app/web/wp-config.php');"; \
+        echo "require_once(ABSPATH . 'wp-settings.php');"; \
+    } > /usr/src/wordpress/wp-config.php && \
+    true
+
+# Bind uploads folder
+RUN set -xe && \
+    mkdir -p /app/web/app/uploads && \
+    true
+
+VOLUME /app/web/app/uploads
 
 # Add our entrypoint and make it executable
 ADD run.sh /run.sh

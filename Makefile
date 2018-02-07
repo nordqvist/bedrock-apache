@@ -1,4 +1,4 @@
-IMAGES := dev production gc
+IMAGES := dev gc production
 
 BUILDS := $(IMAGES:%=build-%)
 RELEASES := $(IMAGES:%=release-%)
