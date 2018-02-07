@@ -1,7 +1,7 @@
 default: build
 
 VERSION := dev
-IMAGE := bedrock-apache
+IMAGE := laravel-apache
 
 .PHONY: build
 build:

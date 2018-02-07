@@ -1,7 +1,7 @@
 default: build
 
 VERSION := gc
-IMAGE := bedrock-apache
+IMAGE := laravel-apache
 
 .PHONY: build
 build:
