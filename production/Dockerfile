@@ -17,7 +17,6 @@ ENV COMPOSER_VERSION=1.5.6 \
 # Default environment variables
 ENV LC_ALL=C.UTF-8 \
   LANG=C.UTF-8 \
-  WP_ENV=development \
   DEFAULT_TIMEZONE=Sweden/Stockholm \
   WEBROOT=/app/web
 
