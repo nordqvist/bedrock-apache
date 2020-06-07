@@ -125,7 +125,7 @@ services:
         source: ./web/app
         target: /app/web/app
     ports:
-      - '8000:80'
+      - '80:80'
     restart: always
     environment:
       DB_HOST: 'db:3306'
@@ -136,4 +136,4 @@ volumes:
     db_data:
 ```
 
-This will make the site available on http://localhost:8000
+This will make the site available on http://localhost
